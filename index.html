@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Inventario PRO FINAL</title>
 
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+
 <style>
 body{
   margin:0;
@@ -88,9 +90,12 @@ button{
 </div>
 
 <div id="detail" style="display:none;">
+
   <button onclick="back()">⬅ Volver</button>
 
   <h3 id="title"></h3>
+
+  <canvas id="qrCanvas" style="margin:10px 0;"></canvas>
 
   <button onclick="shareList()" style="background:#3b82f6;">
     📤 Compartir
@@ -137,10 +142,10 @@ let selectedId = null;
 let data = null;
 
 const params = new URLSearchParams(location.search);
-let modo = params.get("modo") || "creador";
+const modo = params.get("modo") || "creador";
 
-let canEdit = (modo === "creador");
-let canFill = (modo === "creador" || modo === "fill");
+const canEdit = modo === "creador";
+const canFill = modo === "creador" || modo === "fill";
 
 /* ---------------- LISTAS ---------------- */
 
@@ -186,8 +191,20 @@ window.openList = async (id)=>{
 
   document.getElementById("title").innerText = data.nombre;
 
+  generateQR();
   renderItems();
 };
+
+/* ---------------- QR ---------------- */
+
+function generateQR(){
+
+  let url = location.origin + location.pathname + "?id=" + selectedId + "&modo=view";
+
+  QRCode.toCanvas(document.getElementById("qrCanvas"), url, {
+    width:180
+  });
+}
 
 /* ---------------- RENDER ---------------- */
 
@@ -239,13 +256,7 @@ function renderItems(){
   }
 }
 
-/* ---------------- SECURITY FIX ---------------- */
-
-function canWrite(){
-  return canEdit || canFill;
-}
-
-/* ---------------- AUTO SAVE ---------------- */
+/* ---------------- SECURITY ---------------- */
 
 window.autoSave = async (i,value,type)=>{
 
@@ -261,8 +272,6 @@ window.autoSave = async (i,value,type)=>{
   });
 };
 
-/* ---------------- ADD ITEM ---------------- */
-
 window.addItem = async ()=>{
 
   if(!canEdit) return;
@@ -270,10 +279,7 @@ window.addItem = async ()=>{
   let name = document.getElementById("itemName").value;
   let qty = document.getElementById("itemQty").value;
 
-  data.items.push({
-    nombre:name,
-    cantidad:Number(qty)
-  });
+  data.items.push({ nombre:name, cantidad:Number(qty) });
 
   await updateDoc(doc(db,"listas",selectedId),{
     items:data.items
@@ -283,11 +289,9 @@ window.addItem = async ()=>{
   renderItems();
 };
 
-/* ---------------- QTY ---------------- */
-
 window.updateQty = async (i,val)=>{
 
-  if(!canWrite()) return;
+  if(!canFill) return;
 
   data.items[i].cantidad = Number(val);
 
@@ -296,7 +300,7 @@ window.updateQty = async (i,val)=>{
   });
 };
 
-/* ---------------- BACK FIX ---------------- */
+/* ---------------- BACK ---------------- */
 
 window.back = ()=>{
 
@@ -312,10 +316,14 @@ window.back = ()=>{
 
 window.shareList = ()=>{
 
-  let url = location.origin + location.pathname + "?id=" + selectedId + "&modo=view";
+  let base = location.origin + location.pathname;
 
-  let wa = "https://wa.me/?text=" + encodeURIComponent("📦 Inventario: " + url);
-  let ms = "https://www.facebook.com/sharer/sharer.php?u=" + encodeURIComponent(url);
+  let viewURL = `${base}?id=${selectedId}&modo=view`;
+  let fillURL = `${base}?id=${selectedId}&modo=fill`;
+  let creatorURL = `${base}?id=${selectedId}&modo=creador`;
+
+  const wa = (u)=> "https://wa.me/?text=" + encodeURIComponent("📦 Inventario: " + u);
+  const ms = (u)=> "https://www.messenger.com/share?link=" + encodeURIComponent(u);
 
   let box = document.createElement("div");
 
@@ -328,13 +336,23 @@ window.shareList = ()=>{
 
   box.innerHTML = `
     <div style="background:#1e293b;padding:15px;border-radius:12px;width:90%;">
-      <h3>📤 Compartir</h3>
+      <h3>📤 Compartir por rol</h3>
 
-      <button onclick="window.open('${wa}','_blank')" style="background:#25D366;">WhatsApp</button>
-      <button onclick="window.open('${ms}','_blank')" style="background:#1877F2;">Messenger</button>
-      <button onclick="navigator.clipboard.writeText('${url}');alert('Copiado')">Copiar link</button>
+      <button onclick="window.open('${wa(viewURL)}','_blank')" style="background:#25D366;">WhatsApp VIEW</button>
+      <button onclick="window.open('${ms(viewURL)}','_blank')" style="background:#1877F2;">Messenger VIEW</button>
+
+      <hr>
+
+      <button onclick="window.open('${wa(fillURL)}','_blank')" style="background:#25D366;">WhatsApp FILL</button>
+      <button onclick="window.open('${ms(fillURL)}','_blank')" style="background:#1877F2;">Messenger FILL</button>
+
+      <hr>
+
+      <button onclick="navigator.clipboard.writeText('${creatorURL}');alert('Copiado CREATOR')">
+        Copiar CREATOR
+      </button>
+
       <button onclick="this.parentElement.parentElement.remove()" style="background:red;">Cerrar</button>
-
     </div>
   `;
 
