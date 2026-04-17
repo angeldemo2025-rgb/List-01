@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Inventario PRO FINAL</title>
+<title>Inventory</title>
 
 <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 
@@ -15,18 +15,13 @@ body{
   color:white;
 }
 
-.container{
-  max-width:500px;
-  margin:auto;
-  padding:15px;
-}
+.container{max-width:500px;margin:auto;padding:15px;}
 
 .card{
   background:#1e293b;
   padding:12px;
   border-radius:12px;
   margin-bottom:10px;
-  cursor:pointer;
 }
 
 input,button{
@@ -40,39 +35,20 @@ input,button{
 button{
   background:#22c55e;
   color:white;
+  cursor:pointer;
 }
 
-.itemRow{
+.row{
   display:flex;
-  justify-content:space-between;
-  align-items:center;
   gap:10px;
+  align-items:center;
   background:#1e293b;
   padding:10px;
   border-radius:10px;
   margin-bottom:8px;
 }
 
-.qtyInput{
-  width:80px;
-  text-align:center;
-  border:none;
-  border-radius:6px;
-  padding:6px;
-}
-
-#fab{
-  position:fixed;
-  bottom:20px;
-  right:20px;
-  width:60px;
-  height:60px;
-  border-radius:50%;
-  background:#22c55e;
-  font-size:30px;
-  color:white;
-  border:none;
-}
+.qty{width:80px;text-align:center;}
 </style>
 </head>
 
@@ -80,51 +56,33 @@ button{
 
 <div class="container">
 
-<h2>📦 Inventario PRO FINAL</h2>
+<h2>📦 INVENTORY</h2>
 
 <div id="home">
   <input id="newList" placeholder="Nueva lista">
-  <button onclick="createList()">➕ Crear lista</button>
-
+  <button onclick="createList()">➕ Crear</button>
   <div id="lists"></div>
 </div>
 
 <div id="detail" style="display:none;">
-
   <button onclick="back()">⬅ Volver</button>
 
   <h3 id="title"></h3>
 
-  <canvas id="qrCanvas" style="margin:10px 0;"></canvas>
+  <canvas id="qr"></canvas>
 
-  <button onclick="shareList()" style="background:#3b82f6;">
-    📤 Compartir
-  </button>
+  <button onclick="share()">📤 Share</button>
 
   <div id="items"></div>
 </div>
 
 </div>
 
-<button id="fab" onclick="openModal()">+</button>
-
-<!-- MODAL -->
-<div id="modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);align-items:center;justify-content:center;">
-  <div style="background:#1e293b;padding:15px;border-radius:12px;width:90%;">
-    <h3>Artículo</h3>
-
-    <input id="itemName" placeholder="Nombre">
-    <input id="itemQty" type="number" placeholder="Cantidad">
-
-    <button onclick="addItem()">Guardar</button>
-    <button onclick="closeModal()">Cancelar</button>
-  </div>
-</div>
-
 <script type="module">
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getFirestore, collection, addDoc, getDocs, doc, getDoc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, getDocs, doc, getDoc, updateDoc, deleteDoc } 
+from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBpWDSAOYjkaJCSjpkzcIy2PuPKCLvwGWE",
@@ -138,18 +96,21 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-let selectedId = null;
+let id = null;
 let data = null;
 
 const params = new URLSearchParams(location.search);
 const modo = params.get("modo") || "creador";
 
-const canEdit = modo === "creador";
-const canFill = modo === "creador" || modo === "fill";
+const isCreator = modo === "creador";
+const isFill = modo === "fill";
+const isView = modo === "view";
 
 /* ---------------- LISTAS ---------------- */
 
 window.createList = async ()=>{
+  if(!isCreator) return;
+
   let name = document.getElementById("newList").value;
   if(!name) return;
 
@@ -158,10 +119,10 @@ window.createList = async ()=>{
     items:[]
   });
 
-  loadLists();
+  load();
 };
 
-async function loadLists(){
+async function load(){
   let cont = document.getElementById("lists");
   cont.innerHTML="";
 
@@ -169,202 +130,199 @@ async function loadLists(){
 
   snap.forEach(d=>{
     cont.innerHTML += `
-    <div class="card" onclick="openList('${d.id}')">
+    <div class="card">
       📁 ${d.data().nombre}
+
+      <button onclick="openList('${d.id}')">Abrir</button>
+
+      ${isCreator ? `
+        <button onclick="editList('${d.id}')">✏️</button>
+        <button onclick="deleteList('${d.id}')">🗑</button>
+      ` : ""}
     </div>`;
   });
 }
 
 /* ---------------- OPEN ---------------- */
 
-window.openList = async (id)=>{
+window.openList = async (lid)=>{
 
-  selectedId = id;
+  id = lid;
 
-  let snap = await getDoc(doc(db,"listas",id));
+  let snap = await getDoc(doc(db,"listas",lid));
   data = snap.data();
-
-  if(!data.items) data.items = [];
 
   document.getElementById("home").style.display="none";
   document.getElementById("detail").style.display="block";
 
   document.getElementById("title").innerText = data.nombre;
 
-  generateQR();
-  renderItems();
+  QRCode.toCanvas(document.getElementById("qr"),
+    location.origin + location.pathname + "?id="+id+"&modo=view",
+    {width:150}
+  );
+
+  render();
 };
-
-/* ---------------- QR ---------------- */
-
-function generateQR(){
-
-  let url = location.origin + location.pathname + "?id=" + selectedId + "&modo=view";
-
-  QRCode.toCanvas(document.getElementById("qrCanvas"), url, {
-    width:180
-  });
-}
 
 /* ---------------- RENDER ---------------- */
 
-function renderItems(){
+function render(){
 
   let cont = document.getElementById("items");
   cont.innerHTML="";
 
-  if(modo === "fill"){
+  if(!data.items) data.items=[];
+
+  // 👀 view + creator
+  data.items.forEach((it,i)=>{
+
+    cont.innerHTML += `
+    <div class="row">
+
+      <div style="flex:1">${it.nombre || ""}</div>
+
+      <input class="qty"
+        type="number"
+        value="${it.cantidad || 0}"
+        ${isView ? "disabled":""}
+        onchange="updateQty(${i},this.value)"
+      >
+
+      ${isCreator ? `<button onclick="deleteItem(${i})">🗑</button>`:""}
+
+    </div>`;
+  });
+
+  // ✍️ fill 5 slots
+  if(isFill){
 
     for(let i=0;i<5;i++){
 
       let it = data.items[i] || {nombre:"",cantidad:0};
 
       cont.innerHTML += `
-      <div class="itemRow">
+      <div class="row">
 
-        <input placeholder="Artículo"
-          value="${it.nombre}"
-          oninput="autoSave(${i}, this.value, 'name')"
-        >
+        <input value="${it.nombre}"
+          oninput="auto(${i},this.value,'name')">
 
-        <input class="qtyInput"
+        <input class="qty"
           type="number"
           value="${it.cantidad}"
-          oninput="autoSave(${i}, this.value, 'qty')"
-        >
+          oninput="auto(${i},this.value,'qty')">
 
       </div>`;
     }
-
-  } else {
-
-    data.items.forEach((it,i)=>{
-
-      cont.innerHTML += `
-      <div class="itemRow">
-
-        <div style="flex:1;"><b>${it.nombre}</b></div>
-
-        <input class="qtyInput"
-          type="number"
-          value="${it.cantidad}"
-          onchange="updateQty(${i},this.value)"
-        >
-
-      </div>`;
-    });
   }
 }
 
-/* ---------------- SECURITY ---------------- */
-
-window.autoSave = async (i,value,type)=>{
-
-  if(!canFill) return;
-
-  if(!data.items[i]) data.items[i] = {nombre:"",cantidad:0};
-
-  if(type === "name") data.items[i].nombre = value;
-  if(type === "qty") data.items[i].cantidad = Number(value);
-
-  await updateDoc(doc(db,"listas",selectedId),{
-    items:data.items
-  });
-};
-
-window.addItem = async ()=>{
-
-  if(!canEdit) return;
-
-  let name = document.getElementById("itemName").value;
-  let qty = document.getElementById("itemQty").value;
-
-  data.items.push({ nombre:name, cantidad:Number(qty) });
-
-  await updateDoc(doc(db,"listas",selectedId),{
-    items:data.items
-  });
-
-  closeModal();
-  renderItems();
-};
+/* ---------------- UPDATE ---------------- */
 
 window.updateQty = async (i,val)=>{
 
-  if(!canFill) return;
+  if(isView) return;
 
   data.items[i].cantidad = Number(val);
 
-  await updateDoc(doc(db,"listas",selectedId),{
+  await updateDoc(doc(db,"listas",id),{
     items:data.items
   });
 };
 
-/* ---------------- BACK ---------------- */
+/* ---------------- AUTO FILL ---------------- */
 
-window.back = ()=>{
+window.auto = async (i,val,type)=>{
 
-  selectedId = null;
-  data = null;
+  if(!isFill && !isCreator) return;
 
-  document.getElementById("detail").style.display="none";
-  document.getElementById("home").style.display="block";
-  document.getElementById("items").innerHTML="";
+  if(!data.items[i]) data.items[i]={nombre:"",cantidad:0};
+
+  if(type==="name") data.items[i].nombre = val;
+  if(type==="qty") data.items[i].cantidad = Number(val);
+
+  await updateDoc(doc(db,"listas",id),{
+    items:data.items
+  });
 };
 
-/* ---------------- SHARE PRO ---------------- */
+/* ---------------- LIST ACTIONS ---------------- */
 
-window.shareList = ()=>{
+window.deleteItem = async (i)=>{
 
-  let base = location.origin + location.pathname;
+  if(!isCreator) return;
 
-  let viewURL = `${base}?id=${selectedId}&modo=view`;
-  let fillURL = `${base}?id=${selectedId}&modo=fill`;
-  let creatorURL = `${base}?id=${selectedId}&modo=creador`;
+  data.items.splice(i,1);
 
-  const wa = (u)=> "https://wa.me/?text=" + encodeURIComponent("📦 Inventario: " + u);
-  const ms = (u)=> "https://www.messenger.com/share?link=" + encodeURIComponent(u);
+  await updateDoc(doc(db,"listas",id),{
+    items:data.items
+  });
+
+  render();
+};
+
+window.deleteList = async (lid)=>{
+
+  if(!isCreator) return;
+
+  await deleteDoc(doc(db,"listas",lid));
+  load();
+};
+
+window.editList = async (lid)=>{
+
+  if(!isCreator) return;
+
+  let n = prompt("Nuevo nombre:");
+  if(!n) return;
+
+  await updateDoc(doc(db,"listas",lid),{
+    nombre:n
+  });
+
+  load();
+};
+
+/* ---------------- SHARE ---------------- */
+
+window.share = ()=>{
+
+  const base = location.origin + location.pathname;
+
+  const view = `${base}?id=${id}&modo=view`;
+  const fill = `${base}?id=${id}&modo=fill`;
+
+  const wa = (u)=>"https://wa.me/?text="+encodeURIComponent("📦 Inventory "+u);
+  const ms = (u)=>"https://www.messenger.com/share?link="+encodeURIComponent(u);
 
   let box = document.createElement("div");
 
-  box.style = `
-    position:fixed;top:0;left:0;width:100%;height:100%;
-    background:rgba(0,0,0,0.6);
-    display:flex;align-items:center;justify-content:center;
-    z-index:9999;
-  `;
+  box.style = "position:fixed;top:0;left:0;width:100%;height:100%;background:#0009;display:flex;align-items:center;justify-content:center";
 
   box.innerHTML = `
-    <div style="background:#1e293b;padding:15px;border-radius:12px;width:90%;">
-      <h3>📤 Compartir por rol</h3>
+  <div style="background:#1e293b;padding:15px;border-radius:12px;width:90%">
 
-      <button onclick="window.open('${wa(viewURL)}','_blank')" style="background:#25D366;">WhatsApp VIEW</button>
-      <button onclick="window.open('${ms(viewURL)}','_blank')" style="background:#1877F2;">Messenger VIEW</button>
+    <button onclick="window.open('${wa(fill)}')">WhatsApp FILL</button>
+    <button onclick="window.open('${ms(fill)}')">Messenger FILL</button>
 
-      <hr>
+    <hr>
 
-      <button onclick="window.open('${wa(fillURL)}','_blank')" style="background:#25D366;">WhatsApp FILL</button>
-      <button onclick="window.open('${ms(fillURL)}','_blank')" style="background:#1877F2;">Messenger FILL</button>
+    <button onclick="window.open('${wa(view)}')">WhatsApp VIEW</button>
+    <button onclick="window.open('${ms(view)}')">Messenger VIEW</button>
 
-      <hr>
+    <button onclick="this.parentElement.parentElement.remove()">Cerrar</button>
 
-      <button onclick="navigator.clipboard.writeText('${creatorURL}');alert('Copiado CREATOR')">
-        Copiar CREATOR
-      </button>
-
-      <button onclick="this.parentElement.parentElement.remove()" style="background:red;">Cerrar</button>
-    </div>
-  `;
+  </div>`;
 
   document.body.appendChild(box);
 };
 
-/* MODAL */
-window.openModal = ()=> document.getElementById("modal").style.display="flex";
-window.closeModal = ()=> document.getElementById("modal").style.display="none";
+/* ---------------- BACK ---------------- */
+
+window.back = ()=> location.reload();
 
 /* INIT */
-loadLists();
+load();
 
 </script>
 
