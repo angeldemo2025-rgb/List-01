@@ -3,9 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Inventario PRO QR</title>
-
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<title>Inventario PRO FINAL</title>
 
 <style>
 body{
@@ -61,16 +59,6 @@ button{
   padding:6px;
 }
 
-.smallBtn{
-  width:auto;
-  padding:6px 8px;
-  margin-left:5px;
-  background:#334155;
-  border:none;
-  border-radius:6px;
-  color:white;
-}
-
 #fab{
   position:fixed;
   bottom:20px;
@@ -82,7 +70,6 @@ button{
   font-size:30px;
   color:white;
   border:none;
-  box-shadow:0 10px 25px rgba(0,0,0,0.4);
 }
 
 #modal{
@@ -110,7 +97,7 @@ button{
 
 <div class="container">
 
-<h2>📦 Inventario PRO QR</h2>
+<h2>📦 Inventario PRO FINAL</h2>
 
 <div id="home">
   <input id="newList" placeholder="Nueva lista">
@@ -129,8 +116,6 @@ button{
     📤 Compartir
   </button>
 
-  <canvas id="qr"></canvas>
-
   <div id="items"></div>
 </div>
 
@@ -146,7 +131,7 @@ button{
     <input id="itemName" placeholder="Nombre">
     <input id="itemQty" type="number" placeholder="Cantidad">
 
-    <button onclick="saveItem()">Guardar</button>
+    <button onclick="addItem()">Guardar</button>
     <button onclick="closeModal()">Cancelar</button>
 
   </div>
@@ -171,7 +156,6 @@ const db = getFirestore(app);
 
 let selectedId = null;
 let data = null;
-let editIndex = null;
 
 let modo = new URLSearchParams(location.search).get("modo") || "creador";
 
@@ -206,72 +190,137 @@ async function loadLists(){
 /* ---------------- OPEN ---------------- */
 
 window.openList = async (id)=>{
+
   selectedId = id;
 
   let snap = await getDoc(doc(db,"listas",id));
   data = snap.data();
+
+  if(!data.items) data.items = [];
 
   document.getElementById("home").style.display="none";
   document.getElementById("detail").style.display="block";
 
   document.getElementById("title").innerText = data.nombre;
 
-  generateQR();
   renderItems();
 };
-
-/* ---------------- QR ---------------- */
-
-function generateQR(){
-  let url = location.origin + location.pathname + "?id=" + selectedId + "&modo=view";
-
-  QRCode.toCanvas(document.getElementById("qr"), url, {
-    width:180
-  });
-}
 
 /* ---------------- RENDER ---------------- */
 
 function renderItems(){
+
   let cont = document.getElementById("items");
   cont.innerHTML="";
 
-  data.items.forEach((it,i)=>{
-    cont.innerHTML += `
-    <div class="itemRow">
+  if(modo === "fill"){
 
-      <div style="flex:1;">
-        <b>${it.nombre}</b>
-      </div>
+    // 🔥 5 ESPACIOS LIBRES AUTOMÁTICOS
+    for(let i=0;i<5;i++){
 
-      <input class="qtyInput"
-        type="number"
-        value="${it.cantidad}"
-        onchange="updateQty(${i},this.value)"
-      >
+      let item = data.items[i] || {nombre:"",cantidad:0};
 
-    </div>`;
-  });
+      cont.innerHTML += `
+      <div class="itemRow">
+
+        <input placeholder="Artículo"
+          value="${item.nombre}"
+          oninput="autoSave(${i}, this.value, 'name')"
+        >
+
+        <input class="qtyInput"
+          type="number"
+          value="${item.cantidad}"
+          oninput="autoSave(${i}, this.value, 'qty')"
+        >
+
+      </div>`;
+    }
+
+  } else {
+
+    data.items.forEach((it,i)=>{
+
+      cont.innerHTML += `
+      <div class="itemRow">
+
+        <div style="flex:1;"><b>${it.nombre}</b></div>
+
+        <input class="qtyInput"
+          type="number"
+          value="${it.cantidad}"
+          onchange="updateQty(${i},this.value)"
+        >
+
+      </div>`;
+    });
+  }
 }
 
-/* ---------------- BACK FIX 100% ---------------- */
+/* ---------------- AUTO SAVE FILL ---------------- */
+
+window.autoSave = async (i,value,type)=>{
+
+  if(!data.items[i]) data.items[i] = {nombre:"",cantidad:0};
+
+  if(type === "name") data.items[i].nombre = value;
+  if(type === "qty") data.items[i].cantidad = Number(value);
+
+  await updateDoc(doc(db,"listas",selectedId),{
+    items:data.items
+  });
+};
+
+/* ---------------- ADD ITEM ---------------- */
+
+window.addItem = async ()=>{
+
+  let name = document.getElementById("itemName").value;
+  let qty = document.getElementById("itemQty").value;
+
+  if(!name) return;
+
+  data.items.push({
+    nombre:name,
+    cantidad:Number(qty)
+  });
+
+  await updateDoc(doc(db,"listas",selectedId),{
+    items:data.items
+  });
+
+  closeModal();
+  renderItems();
+};
+
+/* ---------------- UPDATE QTY ---------------- */
+
+window.updateQty = async (i,val)=>{
+
+  data.items[i].cantidad = Number(val);
+
+  await updateDoc(doc(db,"listas",selectedId),{
+    items:data.items
+  });
+};
+
+/* ---------------- BACK FIX ---------------- */
 
 window.back = ()=>{
+
   selectedId = null;
   data = null;
-  editIndex = null;
 
   document.getElementById("detail").style.display="none";
   document.getElementById("home").style.display="block";
   document.getElementById("items").innerHTML="";
 };
 
-/* ---------------- SHARE PRO ---------------- */
+/* ---------------- SHARE ---------------- */
 
 window.shareList = ()=>{
 
-  let base = location.origin + location.pathname;
-  let url = base + "?id=" + selectedId + "&modo=view";
+  let url = location.origin + location.pathname + "?id=" + selectedId + "&modo=view";
 
   let wa = "https://wa.me/?text=" + encodeURIComponent("📦 Inventario: " + url);
   let ms = "https://www.facebook.com/sharer/sharer.php?u=" + encodeURIComponent(url);
@@ -298,16 +347,6 @@ window.shareList = ()=>{
   `;
 
   document.body.appendChild(box);
-};
-
-/* ---------------- SAVE QTY ---------------- */
-
-window.updateQty = async (i,val)=>{
-  data.items[i].cantidad = Number(val);
-
-  await updateDoc(doc(db,"listas",selectedId),{
-    items:data.items
-  });
 };
 
 /* INIT */
