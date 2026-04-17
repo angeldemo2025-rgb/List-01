@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Inventory PRO</title>
+<title>Inventory</title>
 
 <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 
@@ -16,6 +16,8 @@ body{
 }
 
 .container{max-width:500px;margin:auto;padding:15px;}
+
+h2{text-align:center;}
 
 .card{
   background:#1e293b;
@@ -35,29 +37,7 @@ input,button{
 button{
   background:#22c55e;
   color:white;
-}
-
-/* 🔥 BOTÓN + ANIMADO */
-#fab{
-  position:fixed;
-  bottom:20px;
-  right:20px;
-  width:65px;
-  height:65px;
-  border-radius:50%;
-  font-size:30px;
-  background:#22c55e;
-  color:white;
-  border:none;
-  box-shadow:0 10px 20px rgba(0,0,0,0.4);
-  animation:pulse 1.5s infinite;
-  display:none;
-}
-
-@keyframes pulse{
-  0%{transform:scale(1);}
-  50%{transform:scale(1.15);}
-  100%{transform:scale(1);}
+  cursor:pointer;
 }
 
 .row{
@@ -71,6 +51,28 @@ button{
 }
 
 .qty{width:80px;text-align:center;}
+
+#fab{
+  position:fixed;
+  bottom:20px;
+  right:20px;
+  width:65px;
+  height:65px;
+  border-radius:50%;
+  font-size:30px;
+  background:#22c55e;
+  color:white;
+  border:none;
+  box-shadow:0 10px 20px rgba(0,0,0,0.4);
+  display:none;
+  animation:pulse 1.5s infinite;
+}
+
+@keyframes pulse{
+  0%{transform:scale(1);}
+  50%{transform:scale(1.15);}
+  100%{transform:scale(1);}
+}
 </style>
 </head>
 
@@ -101,8 +103,7 @@ button{
 
 </div>
 
-<!-- 🔥 BOTÓN + -->
-<button id="fab" onclick="openAdd()">＋</button>
+<button id="fab" onclick="addItem()">＋</button>
 
 <script type="module">
 
@@ -122,34 +123,27 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-let id=null;
-let data=null;
+let currentId = null;
+let currentData = null;
 
-const params=new URLSearchParams(location.search);
-const modo=params.get("modo")||"creador";
+const params = new URLSearchParams(location.search);
+const modo = params.get("modo") || "creador";
 
-const isCreator=modo==="creador";
-const isFill=modo==="fill";
-const isView=modo==="view";
+const isCreator = modo === "creador";
+const isFill = modo === "fill";
+const isView = modo === "view";
 
-/* ---------------- FAB CONTROL ---------------- */
-window.onload=()=>{
-  const fab=document.getElementById("fab");
-
-  if(isCreator){
-    fab.style.display="block";
-  }else{
-    fab.style.display="none";
-  }
+/* ---------------- FAB ---------------- */
+window.onload = ()=>{
+  document.getElementById("fab").style.display = isCreator ? "block" : "none";
 };
 
-/* ---------------- LISTAS ---------------- */
-
-window.createList=async()=>{
+/* ---------------- CREATE LIST ---------------- */
+window.createList = async ()=>{
 
   if(!isCreator) return;
 
-  let name=document.getElementById("newList").value;
+  let name = document.getElementById("newList").value;
   if(!name) return;
 
   await addDoc(collection(db,"listas"),{
@@ -160,6 +154,7 @@ window.createList=async()=>{
   load();
 };
 
+/* ---------------- LOAD ---------------- */
 async function load(){
 
   let cont=document.getElementById("lists");
@@ -177,21 +172,22 @@ async function load(){
 }
 
 /* ---------------- OPEN ---------------- */
+window.openList = async (id)=>{
 
-window.openList=async(idList)=>{
+  currentId = id;
 
-  id=idList;
+  let snap = await getDoc(doc(db,"listas",id));
+  currentData = snap.data();
 
-  let snap=await getDoc(doc(db,"listas",id));
-  data=snap.data();
+  if(!currentData.items) currentData.items = [];
 
   document.getElementById("home").style.display="none";
   document.getElementById("detail").style.display="block";
 
-  document.getElementById("title").innerText=data.nombre;
+  document.getElementById("title").innerText = currentData.nombre;
 
   QRCode.toCanvas(document.getElementById("qr"),
-    location.origin+location.pathname+"?id="+id+"&modo=view",
+    location.origin + location.pathname + "?id="+id+"&modo=view",
     {width:150}
   );
 
@@ -199,16 +195,14 @@ window.openList=async(idList)=>{
 };
 
 /* ---------------- RENDER ---------------- */
-
 function render(){
 
   let cont=document.getElementById("items");
   cont.innerHTML="";
 
-  if(!data.items) data.items=[];
+  if(!currentData.items) currentData.items=[];
 
-  // 👀 view + creator
-  data.items.forEach((it,i)=>{
+  currentData.items.forEach((it,i)=>{
 
     cont.innerHTML+=`
     <div class="row">
@@ -218,95 +212,131 @@ function render(){
       <input class="qty"
         type="number"
         value="${it.cantidad||0}"
-        ${isView?"disabled":""}
+        ${isView ? "disabled":""}
         onchange="updateQty(${i},this.value)">
 
     </div>`;
   });
 
-  // ✍️ fill 5 slots
+  // ✍️ FILL MODE (5 slots)
   if(isFill){
 
     for(let i=0;i<5;i++){
 
-      let it=data.items[i]||{nombre:"",cantidad:0};
+      let it=currentData.items[i]||{nombre:"",cantidad:0};
 
       cont.innerHTML+=`
       <div class="row">
 
         <input value="${it.nombre}"
-          oninput="auto(${i},this.value,'name')">
+          oninput="autoSave(${i},this.value,'name')">
 
         <input class="qty"
           type="number"
           value="${it.cantidad}"
-          oninput="auto(${i},this.value,'qty')">
+          oninput="autoSave(${i},this.value,'qty')">
 
       </div>`;
     }
   }
 }
 
-/* ---------------- ADD ITEM (FAB) ---------------- */
+/* ---------------- UPDATE QTY ---------------- */
+window.updateQty = async (i,val)=>{
 
-window.openAdd=async()=>{
+  if(isView) return;
+
+  currentData.items[i].cantidad = Number(val);
+
+  await updateDoc(doc(db,"listas",currentId),{
+    items: currentData.items
+  });
+};
+
+/* ---------------- AUTO SAVE ---------------- */
+window.autoSave = async (i,val,type)=>{
+
+  if(isView) return;
+
+  if(!currentData.items[i]){
+    currentData.items[i]={nombre:"",cantidad:0};
+  }
+
+  if(type==="name") currentData.items[i].nombre=val;
+  if(type==="qty") currentData.items[i].cantidad=Number(val);
+
+  await updateDoc(doc(db,"listas",currentId),{
+    items: currentData.items
+  });
+};
+
+/* ---------------- ADD ITEM (+) ---------------- */
+window.addItem = async ()=>{
 
   if(!isCreator) return;
 
-  let name=prompt("Artículo:");
-  let qty=prompt("Cantidad:");
+  let name = prompt("Artículo:");
+  let qty = prompt("Cantidad:");
 
   if(!name) return;
 
-  data.items.push({
+  currentData.items.push({
     nombre:name,
     cantidad:Number(qty||0)
   });
 
-  await updateDoc(doc(db,"listas",id),{
-    items:data.items
+  await updateDoc(doc(db,"listas",currentId),{
+    items: currentData.items
   });
 
   render();
 };
 
-/* ---------------- UPDATE ---------------- */
+/* ---------------- SHARE (FIXED) ---------------- */
+window.share = ()=>{
 
-window.updateQty=async(i,val)=>{
+  if(!currentId){
+    alert("Abre una lista primero");
+    return;
+  }
 
-  if(isView) return;
+  const base = location.origin + location.pathname;
 
-  data.items[i].cantidad=Number(val);
+  const view = `${base}?id=${currentId}&modo=view`;
+  const fill = `${base}?id=${currentId}&modo=fill`;
 
-  await updateDoc(doc(db,"listas",id),{
-    items:data.items
-  });
-};
+  const wa = (u)=>"https://wa.me/?text="+encodeURIComponent("📦 Inventory: "+u);
 
-/* ---------------- FILL ---------------- */
+  const box=document.createElement("div");
 
-window.auto=async(i,val,type)=>{
+  box.style="position:fixed;inset:0;background:#0008;display:flex;align-items:center;justify-content:center";
 
-  if(!isFill && !isCreator) return;
+  box.innerHTML=`
+  <div style="background:#1e293b;padding:15px;border-radius:12px;width:90%">
 
-  if(!data.items[i]) data.items[i]={nombre:"",cantidad:0};
+    <button onclick="window.open('${wa(fill)}')">WhatsApp FILL</button>
+    <button onclick="window.open('${wa(view)}')">WhatsApp VIEW</button>
 
-  if(type==="name") data.items[i].nombre=val;
-  if(type==="qty") data.items[i].cantidad=Number(val);
+    <button onclick="this.parentElement.parentElement.remove()">Cerrar</button>
 
-  await updateDoc(doc(db,"listas",id),{
-    items:data.items
-  });
+  </div>`;
+
+  document.body.appendChild(box);
 };
 
 /* ---------------- BACK ---------------- */
+window.back = ()=>{
 
-window.back=()=>location.reload();
+  currentId=null;
+  currentData=null;
+
+  document.getElementById("detail").style.display="none";
+  document.getElementById("home").style.display="block";
+};
 
 /* INIT */
 load();
 
 </script>
-
 </body>
 </html>
