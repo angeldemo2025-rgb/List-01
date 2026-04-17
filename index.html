@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PRO</title>
+<title>Inventario PRO FINAL</title>
 
 <style>
 body{
@@ -40,7 +40,6 @@ button{
   color:white;
 }
 
-/* ITEM */
 .itemRow{
   display:flex;
   justify-content:space-between;
@@ -70,7 +69,6 @@ button{
   color:white;
 }
 
-/* FAB */
 #fab{
   position:fixed;
   bottom:20px;
@@ -85,7 +83,6 @@ button{
   box-shadow:0 10px 25px rgba(0,0,0,0.4);
 }
 
-/* MODAL */
 #modal{
   position:fixed;
   top:0;
@@ -111,7 +108,7 @@ button{
 
 <div class="container">
 
-<h2>📦 Inventario PRO EMPRESA</h2>
+<h2>📦 Inventario PRO FINAL</h2>
 
 <!-- LISTAS -->
 <div id="home">
@@ -175,7 +172,7 @@ let selectedId = null;
 let data = null;
 let editIndex = null;
 
-// 👑 ROLES
+// 👑 ROLE
 let modo = new URLSearchParams(location.search).get("modo") || "creador";
 
 /* ---------------- LISTAS ---------------- */
@@ -208,7 +205,7 @@ async function loadLists(){
   });
 }
 
-/* ---------------- ABRIR ---------------- */
+/* ---------------- OPEN ---------------- */
 
 window.openList = async (id)=>{
   selectedId = id;
@@ -287,15 +284,9 @@ window.saveItem = async ()=>{
   if(!name) return;
 
   if(editIndex !== null){
-    data.items[editIndex] = {
-      nombre:name,
-      cantidad:Number(qty)
-    };
+    data.items[editIndex] = { nombre:name, cantidad:Number(qty) };
   } else {
-    data.items.push({
-      nombre:name,
-      cantidad:Number(qty)
-    });
+    data.items.push({ nombre:name, cantidad:Number(qty) });
   }
 
   await updateDoc(doc(db,"listas",selectedId),{
@@ -329,7 +320,7 @@ window.deleteItem = async (i)=>{
   renderItems();
 };
 
-/* ---------------- AUTO UPDATE ---------------- */
+/* ---------------- QTY ---------------- */
 
 window.updateQty = async (i,val)=>{
   if(modo === "view") return;
@@ -352,13 +343,13 @@ window.shareList = ()=>{
   let wa = "https://wa.me/?text=" + encodeURIComponent(text);
   let ms = "https://www.facebook.com/sharer/sharer.php?u=" + encodeURIComponent(url);
 
-  let opt = prompt("1 WhatsApp\n2 Messenger\n3 Copiar");
+  let opt = prompt("1 WhatsApp\n2 Messenger\n3 Copiar link");
 
   if(opt=="1") window.open(wa);
   if(opt=="2") window.open(ms);
   if(opt=="3"){
     navigator.clipboard.writeText(url);
-    alert("Copiado");
+    alert("Link copiado");
   }
 };
 
