@@ -3,7 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Inventario PRO FINAL</title>
+<title>Inventario PRO QR</title>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 
 <style>
 body{
@@ -108,9 +110,8 @@ button{
 
 <div class="container">
 
-<h2>📦 Inventario PRO FINAL</h2>
+<h2>📦 Inventario PRO QR</h2>
 
-<!-- LISTAS -->
 <div id="home">
   <input id="newList" placeholder="Nueva lista">
   <button onclick="createList()">➕ Crear lista</button>
@@ -118,8 +119,8 @@ button{
   <div id="lists"></div>
 </div>
 
-<!-- DETALLE -->
 <div id="detail" style="display:none;">
+
   <button onclick="back()">⬅ Volver</button>
 
   <h3 id="title"></h3>
@@ -128,15 +129,15 @@ button{
     📤 Compartir
   </button>
 
+  <canvas id="qr"></canvas>
+
   <div id="items"></div>
 </div>
 
 </div>
 
-<!-- FAB -->
 <button id="fab" onclick="openModal()">+</button>
 
-<!-- MODAL -->
 <div id="modal">
   <div id="modalBox">
 
@@ -172,14 +173,11 @@ let selectedId = null;
 let data = null;
 let editIndex = null;
 
-// 👑 ROLE
 let modo = new URLSearchParams(location.search).get("modo") || "creador";
 
 /* ---------------- LISTAS ---------------- */
 
 window.createList = async ()=>{
-  if(modo !== "creador") return;
-
   let name = document.getElementById("newList").value;
   if(!name) return;
 
@@ -213,15 +211,24 @@ window.openList = async (id)=>{
   let snap = await getDoc(doc(db,"listas",id));
   data = snap.data();
 
-  if(!data.items) data.items = [];
-
   document.getElementById("home").style.display="none";
   document.getElementById("detail").style.display="block";
 
   document.getElementById("title").innerText = data.nombre;
 
+  generateQR();
   renderItems();
 };
+
+/* ---------------- QR ---------------- */
+
+function generateQR(){
+  let url = location.origin + location.pathname + "?id=" + selectedId + "&modo=view";
+
+  QRCode.toCanvas(document.getElementById("qr"), url, {
+    width:180
+  });
+}
 
 /* ---------------- RENDER ---------------- */
 
@@ -237,120 +244,70 @@ function renderItems(){
         <b>${it.nombre}</b>
       </div>
 
-      <div>
-        <input 
-          class="qtyInput"
-          type="number"
-          value="${it.cantidad}"
-          ${modo==="view" ? "disabled" : ""}
-          onchange="updateQty(${i},this.value)"
-        >
-      </div>
-
-      ${modo==="creador" ? `
-      <div>
-        <button class="smallBtn" onclick="editItem(${i})">✏️</button>
-        <button class="smallBtn" onclick="deleteItem(${i})">🗑</button>
-      </div>
-      ` : ""}
+      <input class="qtyInput"
+        type="number"
+        value="${it.cantidad}"
+        onchange="updateQty(${i},this.value)"
+      >
 
     </div>`;
   });
 }
 
-/* ---------------- FAB ---------------- */
+/* ---------------- BACK FIX 100% ---------------- */
 
-window.openModal = ()=>{
-  if(modo !== "creador") return;
-
+window.back = ()=>{
+  selectedId = null;
+  data = null;
   editIndex = null;
-  document.getElementById("itemName").value="";
-  document.getElementById("itemQty").value="";
-  document.getElementById("modal").style.display="flex";
+
+  document.getElementById("detail").style.display="none";
+  document.getElementById("home").style.display="block";
+  document.getElementById("items").innerHTML="";
 };
 
-window.closeModal = ()=>{
-  document.getElementById("modal").style.display="none";
+/* ---------------- SHARE PRO ---------------- */
+
+window.shareList = ()=>{
+
+  let base = location.origin + location.pathname;
+  let url = base + "?id=" + selectedId + "&modo=view";
+
+  let wa = "https://wa.me/?text=" + encodeURIComponent("📦 Inventario: " + url);
+  let ms = "https://www.facebook.com/sharer/sharer.php?u=" + encodeURIComponent(url);
+
+  let box = document.createElement("div");
+
+  box.style = `
+    position:fixed;top:0;left:0;width:100%;height:100%;
+    background:rgba(0,0,0,0.6);
+    display:flex;align-items:center;justify-content:center;
+    z-index:9999;
+  `;
+
+  box.innerHTML = `
+    <div style="background:#1e293b;padding:15px;border-radius:12px;width:90%;">
+      <h3>📤 Compartir</h3>
+
+      <button onclick="window.open('${wa}','_blank')" style="background:#25D366;">WhatsApp</button>
+      <button onclick="window.open('${ms}','_blank')" style="background:#1877F2;">Messenger</button>
+      <button onclick="navigator.clipboard.writeText('${url}');alert('Copiado')">Copiar link</button>
+      <button onclick="this.parentElement.parentElement.remove()" style="background:red;">Cerrar</button>
+
+    </div>
+  `;
+
+  document.body.appendChild(box);
 };
 
-/* ---------------- SAVE ---------------- */
-
-window.saveItem = async ()=>{
-  if(modo !== "creador") return;
-
-  let name = document.getElementById("itemName").value;
-  let qty = document.getElementById("itemQty").value;
-
-  if(!name) return;
-
-  if(editIndex !== null){
-    data.items[editIndex] = { nombre:name, cantidad:Number(qty) };
-  } else {
-    data.items.push({ nombre:name, cantidad:Number(qty) });
-  }
-
-  await updateDoc(doc(db,"listas",selectedId),{
-    items:data.items
-  });
-
-  closeModal();
-  renderItems();
-};
-
-/* ---------------- EDIT ---------------- */
-
-window.editItem = (i)=>{
-  editIndex = i;
-
-  document.getElementById("itemName").value = data.items[i].nombre;
-  document.getElementById("itemQty").value = data.items[i].cantidad;
-
-  document.getElementById("modal").style.display="flex";
-};
-
-/* ---------------- DELETE ---------------- */
-
-window.deleteItem = async (i)=>{
-  data.items.splice(i,1);
-
-  await updateDoc(doc(db,"listas",selectedId),{
-    items:data.items
-  });
-
-  renderItems();
-};
-
-/* ---------------- QTY ---------------- */
+/* ---------------- SAVE QTY ---------------- */
 
 window.updateQty = async (i,val)=>{
-  if(modo === "view") return;
-
   data.items[i].cantidad = Number(val);
 
   await updateDoc(doc(db,"listas",selectedId),{
     items:data.items
   });
-};
-
-/* ---------------- SHARE ---------------- */
-
-window.shareList = ()=>{
-
-  let url = location.href;
-
-  let text = "📦 Inventario: " + url;
-
-  let wa = "https://wa.me/?text=" + encodeURIComponent(text);
-  let ms = "https://www.facebook.com/sharer/sharer.php?u=" + encodeURIComponent(url);
-
-  let opt = prompt("1 WhatsApp\n2 Messenger\n3 Copiar link");
-
-  if(opt=="1") window.open(wa);
-  if(opt=="2") window.open(ms);
-  if(opt=="3"){
-    navigator.clipboard.writeText(url);
-    alert("Link copiado");
-  }
 };
 
 /* INIT */
